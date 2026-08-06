@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Bolo Safety{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">⛑</span>
+    <span class="brand-name">Bolo Safety</span>
+  </div>
+  {% if current_user.is_authenticated %}
+  <nav class="topnav">
+    {% if current_user.role == 'user' %}<a href="{{ url_for('user_dashboard') }}" class="active">Report</a>{% endif %}
+    {% if current_user.role in ('hse','admin') %}<a href="{{ url_for('hse_dashboard') }}" class="{{ 'active' if role=='hse' else '' }}">HSE Overview</a>{% endif %}
+    {% if current_user.role == 'admin' %}<a href="{{ url_for('admin_dashboard') }}" class="{{ 'active' if role=='admin' else '' }}">Admin</a>{% endif %}
+  </nav>
+  <div class="userbox">
+    <span class="pill role-{{ current_user.role }}">{{ current_user.role|upper }}</span>
+    <span class="uname">{{ current_user.name }}</span>
+    <a href="{{ url_for('logout') }}" class="logout">Log out</a>
+  </div>
+  {% endif %}
+</header>
+
+<main class="page">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-stack">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

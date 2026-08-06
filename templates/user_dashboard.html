@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Report an observation{% endblock %}
+{% block content %}
+
+<section class="hero-card">
+  <h1>My safety observations</h1>
+  <p class="muted">Voice reports are recorded directly in the mobile app — record your report there in any language, and it will show up here automatically once it's transcribed, translated, and categorized.</p>
+</section>
+
+<section class="log-card">
+  <h2>My submitted observations ({{ observations|length }})</h2>
+  <table class="log-table">
+    <thead>
+      <tr><th>Time</th><th>Category</th><th>Severity</th><th>Location</th><th>English Translation</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for o in observations %}
+      <tr>
+        <td>{{ o.created_at.strftime('%d %b, %H:%M') }}</td>
+        <td><span class="tag tag-{{ o.category|lower|replace(' ', '-') }}">{{ o.category }}</span></td>
+        <td><span class="sev sev-{{ o.severity|lower }}">{{ o.severity }}</span></td>
+        <td>{{ o.location }}</td>
+        <td class="translation-cell">{{ o.english_translation }}</td>
+        <td>{{ o.status }}</td>
+        <td><a href="{{ url_for('api_get_audio', obs_id=o.id) }}" target="_blank" class="play-link">▶ audio</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">You haven't submitted any observations yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

@@ -1,0 +1,136 @@
+<div id="dashboard-root" data-role="{{ role }}">
+
+  <div class="dash-header">
+    <div>
+      <h1>Bolo Safety Overview</h1>
+      <p class="muted" id="obs-count-label">Loading observations…</p>
+    </div>
+    <div class="dash-actions">
+      <button id="clear-filters-btn" class="btn-ghost">Clear filters</button>
+      <a href="{{ url_for('export_csv') }}" class="btn-ghost">Export CSV</a>
+      {% if role == 'admin' %}
+      <button id="add-observation-btn" class="btn-primary">+ Add observation</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="filters-row">
+    <select id="filter-reporter"><option value="">All reporters</option></select>
+    <select id="filter-category">
+      <option value="">All categories</option>
+      <option>Unsafe Act</option><option>Unsafe Condition</option><option>Near Miss</option><option>LTI</option>
+    </select>
+    <select id="filter-severity">
+      <option value="">All severities</option>
+      <option>High</option><option>Medium</option><option>Low</option><option>Not specified</option>
+    </select>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-value" id="kpi-total">0</div><div class="kpi-label">Total Observations</div><div class="kpi-sub">All categories</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-nearmiss">0</div><div class="kpi-label">Near Misses</div><div class="kpi-sub">Potential hazards</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-unsafeact">0</div><div class="kpi-label">Unsafe Acts</div><div class="kpi-sub">Behavioural risks</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-unsafecond">0</div><div class="kpi-label">Unsafe Conditions</div><div class="kpi-sub">Environmental risks</div></div>
+    <div class="kpi-card kpi-danger"><div class="kpi-value" id="kpi-high">0</div><div class="kpi-label">High Severity</div><div class="kpi-sub">Requires immediate action</div></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card wide"><h3>Observations Over Time</h3><canvas id="chart-time"></canvas></div>
+    <div class="chart-card"><h3>Category Breakdown</h3><canvas id="chart-category"></canvas></div>
+    <div class="chart-card"><h3>Severity Distribution</h3><canvas id="chart-severity"></canvas></div>
+    <div class="chart-card"><h3>Top Locations Reported</h3><canvas id="chart-locations"></canvas></div>
+    <div class="chart-card wide"><h3>Reporting Activity by Hour (24H)</h3><canvas id="chart-hourly"></canvas></div>
+    <div class="chart-card"><h3>Most Active Reporters</h3><div id="top-reporters" class="top-reporters-list"></div></div>
+  </div>
+
+  <div class="log-card">
+    <h2>Observation Log <span id="log-count" class="muted"></span></h2>
+    <div class="table-scroll">
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>Time</th><th>Reporter</th><th>Category</th><th>Severity</th><th>Location</th>
+          <th>Urdu Script</th><th>English Translation</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="log-tbody"></tbody>
+    </table>
+    </div>
+  </div>
+
+  {% if role == 'admin' %}
+  <div class="log-card">
+    <h2>User Management</h2>
+    <table class="log-table">
+      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.name }}</td><td>{{ u.username }}</td><td>{{ u.role }}</td>
+          <td>{% if u.id != current_user.id %}<button class="btn-danger-sm" onclick="deleteUser({{ u.id }})">Delete</button>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button id="add-user-btn" class="btn-ghost" style="margin-top:12px;">+ Add user</button>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Edit observation modal -->
+<div id="edit-modal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Edit observation</h3>
+    <label>Reporter name</label><input id="edit-reporter" type="text">
+    <label>Category</label>
+    <select id="edit-category"><option>Unsafe Act</option><option>Unsafe Condition</option><option>Near Miss</option><option>LTI</option></select>
+    <label>Severity</label>
+    <select id="edit-severity"><option>High</option><option>Medium</option><option>Low</option><option>Not specified</option></select>
+    <label>Location</label><input id="edit-location" type="text">
+    <label>Status</label>
+    <select id="edit-status"><option>pending</option><option>reviewed</option><option>closed</option></select>
+    <div class="modal-actions">
+      <button id="edit-cancel-btn" class="btn-ghost">Cancel</button>
+      <button id="edit-save-btn" class="btn-primary">Save changes</button>
+    </div>
+  </div>
+</div>
+
+{% if role == 'admin' %}
+<!-- Add observation modal -->
+<div id="add-obs-modal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Add observation manually</h3>
+    <label>Reporter name</label><input id="new-reporter" type="text">
+    <label>Category</label>
+    <select id="new-category"><option>Unsafe Act</option><option>Unsafe Condition</option><option>Near Miss</option><option>LTI</option></select>
+    <label>Severity</label>
+    <select id="new-severity"><option>High</option><option>Medium</option><option>Low</option><option>Not specified</option></select>
+    <label>Location</label><input id="new-location" type="text">
+    <label>English translation / summary</label><textarea id="new-english"></textarea>
+    <div class="modal-actions">
+      <button id="new-cancel-btn" class="btn-ghost">Cancel</button>
+      <button id="new-save-btn" class="btn-primary">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add user modal -->
+<div id="add-user-modal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Add user</h3>
+    <label>Full name</label><input id="new-user-name" type="text">
+    <label>Username</label><input id="new-user-username" type="text">
+    <label>Password</label><input id="new-user-password" type="text" value="changeme123">
+    <label>Role</label>
+    <select id="new-user-role"><option value="user">User</option><option value="hse">HSE</option><option value="admin">Admin</option></select>
+    <div class="modal-actions">
+      <button id="new-user-cancel-btn" class="btn-ghost">Cancel</button>
+      <button id="new-user-save-btn" class="btn-primary">Create user</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>

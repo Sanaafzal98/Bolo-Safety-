@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — Bolo Safety</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <div class="login-mark">⛑</div>
+    <h1>Bolo Safety</h1>
+    <p class="login-sub">Voice-based HSE observation reporting</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}">
+      <label>Username</label>
+      <input type="text" name="username" autocomplete="username" required autofocus>
+      <label>Password</label>
+      <input type="password" name="password" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+    </form>
+
+    <div class="demo-creds">
+      <strong>Demo logins</strong> (created by <code>flask init-db</code>)
+      <div>admin / admin123 &nbsp;·&nbsp; hse / hse123 &nbsp;·&nbsp; worker / worker123</div>
+    </div>
+  </div>
+</body>
+</html>
