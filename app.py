@@ -147,17 +147,42 @@ def _save_audio_and_process(audio_file, fallback_reporter_name=""):
 # extracted by Groq, exactly like the old in-browser flow.
 # ---------------------------------------------------------------------------
 
+@app.route("/api/webhook/debug", methods=["GET", "POST"])
+def webhook_debug():
+    """Temporary troubleshooting endpoint — point the ASR app here to see exactly
+    what it's sending (headers, form fields, files) without any auth or processing."""
+    info = {
+        "method": request.method,
+        "headers": dict(request.headers),
+        "form_fields": {k: v for k, v in request.form.items()},
+        "files_received": [
+            {"field_name": k, "filename": f.filename, "content_type": f.content_type}
+            for k, f in request.files.items()
+        ],
+        "raw_body_length": len(request.get_data()) if not request.form and not request.files else None,
+    }
+    app.logger.info(f"WEBHOOK DEBUG: {info}")
+    print(f"--- Incoming webhook-debug request ---\n{info}\n")
+    return jsonify(info), 200
+
+
 @app.route("/api/webhook/voice-observation", methods=["POST"])
 def webhook_voice_observation():
     expected_key = os.environ.get("WEBHOOK_API_KEY")
     if expected_key:
-        provided_key = request.headers.get("X-Webhook-Key") or request.form.get("api_key")
+        provided_key = (
+            request.headers.get("X-Webhook-Key")
+            or request.form.get("api_key")
+            or request.form.get("secret")
+        )
         if provided_key != expected_key:
             return jsonify({"error": "Unauthorized"}), 401
 
-    audio_file = request.files.get("audio")
+    audio_file = request.files.get("audio") or request.files.get("file")
     if not audio_file or audio_file.filename == "":
-        return jsonify({"error": "No 'audio' file in request"}), 400
+        # No audio attached — this is the app's "Test Connection" ping, not a real
+        # upload. Reply 200 OK so the app shows "connected" instead of an error.
+        return jsonify({"status": "ok", "note": "Connected. No audio in this request."}), 200
 
     reporter_name = request.form.get("reporter_name", "").strip()
     reporter_username = request.form.get("username", "").strip()
@@ -350,6 +375,7 @@ def export_csv():
     observations = Observation.query.order_by(Observation.created_at.desc()).all()
 
     def generate():
+        yield "\ufeff"
         yield "TIME,REPORTER,CATEGORY,SEVERITY,LOCATION,URDU SCRIPT,ENGLISH TRANSLATION,STATUS\n"
         for o in observations:
             row = [
@@ -366,7 +392,7 @@ def export_csv():
 
     return Response(
         generate(),
-        mimetype="text/csv",
+        mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=observation_log.csv"},
     )
 
