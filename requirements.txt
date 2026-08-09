@@ -9,3 +9,4 @@ google-auth==2.32.0
 google-auth-httplib2==0.2.0
 aksharamukha==2.3
 gunicorn==22.0.0
+openpyxl==3.1.5
