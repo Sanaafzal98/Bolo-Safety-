@@ -1,4 +1,4 @@
-# Bolo Safety — Voice HSE Observation App
+# Bolo Safety 
 
 Flask app: workers record a safety observation **in Urdu**, it's automatically
 transcribed, translated to English, categorized (Unsafe Act / Unsafe Condition /
