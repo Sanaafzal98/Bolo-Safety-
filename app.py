@@ -322,34 +322,56 @@ def api_get_audio(obs_id):
     abort(404)
 
 
+
 @app.route("/api/observations/export.csv")
 @roles_required("hse", "admin")
 def export_csv():
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
     observations = Observation.query.order_by(Observation.created_at.desc()).all()
 
-    def generate():
-        yield "\ufeff"
-        yield "TIME,REPORTER,CATEGORY,SEVERITY,LOCATION,URDU SCRIPT,ENGLISH TRANSLATION,STATUS\n"
-        for o in observations:
-            row = [
-                o.created_at.strftime("%d %b, %H:%M") if o.created_at else "",
-                o.reporter_name or "",
-                o.category or "",
-                o.severity or "",
-                o.location or "",
-                (o.urdu_script or "").replace(",", " ").replace("\n", " "),
-                (o.english_translation or "").replace(",", " ").replace("\n", " "),
-                o.status or "",
-            ]
-            yield ",".join(f'"{v}"' for v in row) + "\n"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Observations"
+
+    headers = ["TIME", "REPORTER", "CATEGORY", "SEVERITY", "LOCATION",
+               "URDU SCRIPT", "ENGLISH TRANSLATION", "STATUS"]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+
+    for o in observations:
+        ws.append([
+            o.created_at.strftime("%d %b, %H:%M") if o.created_at else "",
+            o.reporter_name or "",
+            o.category or "",
+            o.severity or "",
+            o.location or "",
+            o.urdu_script or "",
+            o.english_translation or "",
+            o.status or "",
+        ])
+
+    # Enable filter dropdown arrows on the header row
+    ws.auto_filter.ref = ws.dimensions
+
+    # Reasonable column widths
+    widths = [16, 18, 16, 12, 16, 40, 45, 12]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
 
     return Response(
-        generate(),
-        mimetype="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=observation_log.csv"},
+        buf.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=observation_log.xlsx"},
     )
-
-
 @app.cli.command("init-db")
 def init_db():
     db.create_all()
