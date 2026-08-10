@@ -84,10 +84,11 @@ def translate_to_english(audio_path: str) -> str:
     return str(result).strip()
 
 
-def categorize(english_text: str, fallback_reporter_name: str = "") -> dict:
+def categorize(english_text: str, urdu_text: str = "", fallback_reporter_name: str = "") -> dict:
     """
-    Uses llama-3.3-70b-versatile to parse the English translation into
-    structured fields matching the observation log format.
+    Uses llama-3.3-70b-versatile to parse the English translation (plus the
+    original Urdu transcript as backup context) into structured fields
+    matching the observation log format.
     """
     client = get_client()
 
@@ -138,6 +139,13 @@ Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, 
         "'LPG Bullet Storage' locations; a report near the entrance/security likely means 'Main Gate'.\n"
         "- If you are not reasonably confident which official location is meant, output exactly "
         "'Not specified' rather than guessing.\n\n"
+        "IMPORTANT reporter_name rule:\n"
+        "- You will be given TWO versions of the report: an English translation, and (below it) the "
+        "original Urdu-script transcript. The English translation is sometimes shortened and may DROP "
+        "a self-introduction like 'my name is ...' even though the original Urdu clearly states it. "
+        "Always check BOTH texts for a stated name — if the English translation has no name but the "
+        "Urdu transcript does (e.g. 'mera naam X hai' / 'main X hoon'), use that name, transliterated "
+        "into normal English spelling. Only leave reporter_name empty if NEITHER text states a name.\n\n"
         "Category definitions: Near Miss = hazard occurred but no injury/damage; "
         "Unsafe Act = risky behaviour by a person; Unsafe Condition = hazardous environment/equipment state; "
         "LTI = Lost Time Injury, someone was actually injured and could not continue work. "
@@ -145,11 +153,15 @@ Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, 
         "Low = minor/negligible risk."
     )
 
+    user_content = f"English translation:\n{english_text}"
+    if urdu_text:
+        user_content += f"\n\nOriginal Urdu transcript (check this for names/details the translation may have dropped):\n{urdu_text}"
+
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": english_text},
+            {"role": "user", "content": user_content},
         ],
         temperature=0.2,
         response_format={"type": "json_object"},
@@ -183,7 +195,7 @@ def process_audio_report(audio_path: str, fallback_reporter_name: str = "") -> d
     """
     urdu_text = _to_urdu_script(transcribe_original(audio_path))
     english_text = translate_to_english(audio_path)
-    fields = categorize(english_text, fallback_reporter_name=fallback_reporter_name)
+    fields = categorize(english_text, urdu_text=urdu_text, fallback_reporter_name=fallback_reporter_name)
 
     return {
         "urdu_script": urdu_text,
