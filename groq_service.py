@@ -91,18 +91,53 @@ def categorize(english_text: str, fallback_reporter_name: str = "") -> dict:
     """
     client = get_client()
 
+    KNOWN_LOCATIONS = """Substation 1, Substation 2, Substation 2 Extension, Substation 3, Substation 4,
+Substation 5, Substation 5 Extension, Substation 6, Utility Pump Area, Utility Tank Area,
+VCM LCR, VCM Pump House, VCM Tank Farm V-101A, VCM Tank Farm V-101B,
+General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard,
+Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area,
+LPG Bullet Storage V201A, LPG Bullet Storage V201B, LPG Bullet Storage V201C,
+LPG Bullet Storage V201D, LPG Bullet Storage V201E, LPG Bullet Storage V201F,
+LPG Bullet Storage V201G, LPG Bullet Storage V201H,
+Acetic Acid Pump House, Acetic Acid Tank Farm Area T-1201, Acetic Acid Tank Farm Area T-1202,
+Acetic Acid Truck Loading Area, Admin Building, Admin Building Top Area, Central Control Room,
+Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop,
+Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room,
+Warehouse A, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm T-1301, EDC Tank Farm T-1302,
+EDC Truck Loading Area, Jetty Breasting Dolphin 1, Jetty Breasting Dolphin 2, Jetty Head,
+Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Jetty 1,
+Mooring Dolphin 1, Mooring Dolphin 2, Mooring Dolphin 3, Mooring Dolphin 4, Mooring Dolphin 5,
+Mooring Dolphin 6, Mooring Dolphin 7, Mooring Dolphin 8, Mooring Dolphin 9, Mooring Dolphin 10,
+Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
+
     system_prompt = (
         "You are a Health, Safety & Environment (HSE) assistant for an industrial site "
-        "(oil/gas terminal type facility with jetties, tank farms, loading bays, trestles etc). "
-        "You will be given an English translation of a worker's verbal safety observation report. "
+        "(oil/gas/petrochemical terminal with jetties, tank farms, loading bays, substations, "
+        "utility areas etc). "
+        "You will be given an English translation of a worker's verbal safety observation report, "
+        "originally spoken in Urdu/English mix. The worker often describes a location informally or "
+        "vaguely (e.g. 'the grassy area', 'near the big tanks', 'by the main entrance') instead of "
+        "using its official name.\n\n"
+        "Here is the FIXED, OFFICIAL list of real locations at this site:\n"
+        f"{KNOWN_LOCATIONS}\n\n"
         "Extract structured data and respond with ONLY valid JSON, no markdown, no commentary, "
         "in exactly this shape:\n"
         '{"category": "Unsafe Act" | "Unsafe Condition" | "Near Miss" | "LTI", '
         '"severity": "High" | "Medium" | "Low", '
-        '"location": "<short location name, e.g. Loading Bay, Tank Farm, Jetty, Jetty Trestle, or Not specified>", '
+        '"location": "<the single BEST-matching name from the official list above, chosen by meaning/'
+        'context, not just keyword overlap — or exactly \\"Not specified\\" if nothing in the list '
+        'plausibly matches or no location was mentioned at all>", '
         '"reporter_name": "<name if mentioned in the text, otherwise empty string>", '
         '"summary": "<a clean one-sentence English summary of the incident, similar in style to '
-        '\'A reversing truck nearly struck a worker who was in the blind spot at the loading bay entrance\'>"}\n'
+        '\'A reversing truck nearly struck a worker who was in the blind spot at the loading bay entrance\'>"}\n\n'
+        "IMPORTANT location rules:\n"
+        "- ALWAYS pick from the official list above. NEVER invent a new location name, and never output "
+        "a generic guess like 'land' or 'area' that isn't literally in the list.\n"
+        "- Match by real-world meaning: e.g. an open area with grass where vehicles park is almost "
+        "certainly 'Parking Area'; a fire mentioned near LPG tanks likely means one of the "
+        "'LPG Bullet Storage' locations; a report near the entrance/security likely means 'Main Gate'.\n"
+        "- If you are not reasonably confident which official location is meant, output exactly "
+        "'Not specified' rather than guessing.\n\n"
         "Category definitions: Near Miss = hazard occurred but no injury/damage; "
         "Unsafe Act = risky behaviour by a person; Unsafe Condition = hazardous environment/equipment state; "
         "LTI = Lost Time Injury, someone was actually injured and could not continue work. "
