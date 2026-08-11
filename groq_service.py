@@ -92,7 +92,7 @@ def categorize(english_text: str, urdu_text: str = "", fallback_reporter_name: s
     """
     client = get_client()
 
-   KNOWN_LOCATIONS = """Substation 1, Utility Pump Area, Utility Tank Area, VCM LCR, VCM Pump House, VCM Tank Farm, General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard, Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area, LPG Bullet Storage, Acetic Acid Pump House, Acetic Acid Tank Farm Area, Acetic Acid Truck Loading Area, Admin Building, Central Control Room, Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop, Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room, Warehouse, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm, EDC Truck Loading Area, Jetty, Jetty Head, Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Mooring Dolphin, Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
+    KNOWN_LOCATIONS = """Substation 1, Utility Pump Area, Utility Tank Area, VCM LCR, VCM Pump House, VCM Tank Farm, General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard, Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area, LPG Bullet Storage, Acetic Acid Pump House, Acetic Acid Tank Farm Area, Acetic Acid Truck Loading Area, Admin Building, Central Control Room, Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop, Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room, Warehouse, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm, EDC Truck Loading Area, Jetty, Jetty Head, Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Mooring Dolphin, Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
 
     system_prompt = (
         "You are a Health, Safety & Environment (HSE) assistant for an industrial site "
@@ -124,10 +124,9 @@ def categorize(english_text: str, urdu_text: str = "", fallback_reporter_name: s
         "closest sensible match from the list rather than defaulting to 'Not specified' too easily. "
         "Only use 'Not specified' when the report gives NO usable clue at all about where the worker is "
         "(e.g. they never mention any area, landmark, equipment type, or activity tied to a place).\n"
-        "- When the report is vague between near-identical numbered/lettered variants of the same place "
-        "(e.g. it clearly means a tank farm area but never says which specific tank letter/number), "
-        "pick the lowest-numbered/lettered variant from the list as the default best guess (e.g. 'V-101A' "
-        "over 'V-101B', 'Substation 1' over 'Substation 2') rather than refusing to answer.\n\n"
+        "- When the report is vague about which numbered/lettered sub-unit of a place it means (e.g. "
+        "'a tank farm' without saying which one, or 'a jetty' without a number), just pick the general "
+        "location name from the list (e.g. 'VCM Tank Farm', 'Jetty') rather than refusing to answer.\n\n"
         "IMPORTANT reporter_name rule:\n"
         "- You will be given TWO versions of the report: an English translation, and (below it) the "
         "original Urdu-script transcript. The English translation is sometimes shortened and may DROP "
