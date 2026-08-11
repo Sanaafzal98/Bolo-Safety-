@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -57,6 +57,7 @@ class Observation(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_dict(self):
+        pkt_time = self.created_at + timedelta(hours=5) if self.created_at else None
         return {
             "id": self.id,
             "reporter_id": self.reporter_id,
@@ -69,6 +70,6 @@ class Observation(db.Model):
             "audio_filename": self.audio_filename,
             "drive_link": self.drive_link,
             "status": self.status,
-            "created_at": self.created_at.strftime("%d %b, %H:%M") if self.created_at else None,
-            "created_at_iso": self.created_at.isoformat() if self.created_at else None,
+            "created_at": pkt_time.strftime("%d %b, %H:%M") if pkt_time else None,
+            "created_at_iso": pkt_time.isoformat() if pkt_time else None,
         }
