@@ -1,7 +1,7 @@
 import os
 import uuid
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -322,7 +322,6 @@ def api_get_audio(obs_id):
     abort(404)
 
 
-
 @app.route("/api/observations/export.csv")
 @roles_required("hse", "admin")
 def export_csv():
@@ -344,8 +343,9 @@ def export_csv():
         cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
 
     for o in observations:
+        pkt_time = (o.created_at + timedelta(hours=5)) if o.created_at else None
         ws.append([
-            o.created_at.strftime("%d %b, %H:%M") if o.created_at else "",
+            pkt_time.strftime("%d %b, %H:%M") if pkt_time else "",
             o.reporter_name or "",
             o.category or "",
             o.severity or "",
@@ -355,10 +355,8 @@ def export_csv():
             o.status or "",
         ])
 
-    # Enable filter dropdown arrows on the header row
     ws.auto_filter.ref = ws.dimensions
 
-    # Reasonable column widths
     widths = [16, 18, 16, 12, 16, 40, 45, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
@@ -372,6 +370,8 @@ def export_csv():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=observation_log.xlsx"},
     )
+
+
 @app.cli.command("init-db")
 def init_db():
     db.create_all()
