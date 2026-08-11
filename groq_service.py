@@ -92,24 +92,7 @@ def categorize(english_text: str, urdu_text: str = "", fallback_reporter_name: s
     """
     client = get_client()
 
-    KNOWN_LOCATIONS = """Substation 1, Substation 2, Substation 2 Extension, Substation 3, Substation 4,
-Substation 5, Substation 5 Extension, Substation 6, Utility Pump Area, Utility Tank Area,
-VCM LCR, VCM Pump House, VCM Tank Farm V-101A, VCM Tank Farm V-101B,
-General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard,
-Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area,
-LPG Bullet Storage V201A, LPG Bullet Storage V201B, LPG Bullet Storage V201C,
-LPG Bullet Storage V201D, LPG Bullet Storage V201E, LPG Bullet Storage V201F,
-LPG Bullet Storage V201G, LPG Bullet Storage V201H,
-Acetic Acid Pump House, Acetic Acid Tank Farm Area T-1201, Acetic Acid Tank Farm Area T-1202,
-Acetic Acid Truck Loading Area, Admin Building, Admin Building Top Area, Central Control Room,
-Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop,
-Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room,
-Warehouse A, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm T-1301, EDC Tank Farm T-1302,
-EDC Truck Loading Area, Jetty Breasting Dolphin 1, Jetty Breasting Dolphin 2, Jetty Head,
-Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Jetty 1,
-Mooring Dolphin 1, Mooring Dolphin 2, Mooring Dolphin 3, Mooring Dolphin 4, Mooring Dolphin 5,
-Mooring Dolphin 6, Mooring Dolphin 7, Mooring Dolphin 8, Mooring Dolphin 9, Mooring Dolphin 10,
-Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
+   KNOWN_LOCATIONS = """Substation 1, Utility Pump Area, Utility Tank Area, VCM LCR, VCM Pump House, VCM Tank Farm, General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard, Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area, LPG Bullet Storage, Acetic Acid Pump House, Acetic Acid Tank Farm Area, Acetic Acid Truck Loading Area, Admin Building, Central Control Room, Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop, Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room, Warehouse, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm, EDC Truck Loading Area, Jetty, Jetty Head, Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Mooring Dolphin, Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
 
     system_prompt = (
         "You are a Health, Safety & Environment (HSE) assistant for an industrial site "
