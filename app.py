@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, jsonify, send_from_directory, abort, Response
+    flash, jsonify, send_from_directory, abort, Response, session
 )
 from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user
@@ -30,10 +30,40 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(DATA_DIR, "i
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
+# --- Security hardening ---
+app.config["SESSION_COOKIE_SECURE"] = True      # cookie only sent over HTTPS
+app.config["SESSION_COOKIE_HTTPONLY"] = True     # JavaScript can't read the session cookie
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"    # blocks most cross-site cookie theft
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)  # auto-logout after 8h idle
+
 db.init_app(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+
+# --- Brute-force login protection (in-memory, per-username) ---
+_failed_logins = {}  # { username: {"count": int, "locked_until": datetime|None} }
+MAX_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
+
+
+def _is_locked(username):
+    entry = _failed_logins.get(username)
+    if entry and entry.get("locked_until") and datetime.utcnow() < entry["locked_until"]:
+        return entry["locked_until"]
+    return None
+
+
+def _record_failed_login(username):
+    entry = _failed_logins.setdefault(username, {"count": 0, "locked_until": None})
+    entry["count"] += 1
+    if entry["count"] >= MAX_ATTEMPTS:
+        entry["locked_until"] = datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)
+        entry["count"] = 0
+
+
+def _clear_failed_login(username):
+    _failed_logins.pop(username, None)
 
 
 @login_manager.user_loader
@@ -66,10 +96,20 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+
+        locked_until = _is_locked(username)
+        if locked_until:
+            minutes_left = max(1, int((locked_until - datetime.utcnow()).total_seconds() // 60) + 1)
+            flash(f"Too many failed attempts. Try again in {minutes_left} minute(s).", "error")
+            return render_template("login.html")
+
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
+            _clear_failed_login(username)
+            session.permanent = True
             login_user(user)
             return redirect(url_for("dashboard_redirect"))
+        _record_failed_login(username)
         flash("Invalid username or password.", "error")
     return render_template("login.html")
 
