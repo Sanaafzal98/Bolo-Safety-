@@ -27,13 +27,14 @@ def get_client():
 
 
 def transcribe_original(audio_path: str) -> str:
-    """Returns the Urdu-script transcript."""
+    """Returns the original-language transcript. Language is auto-detected
+    (Urdu, Punjabi, or Sindhi) rather than forced, so each is transcribed
+    accurately in its own script."""
     client = get_client()
     with open(audio_path, "rb") as f:
         result = client.audio.transcriptions.create(
             file=(os.path.basename(audio_path), f.read()),
             model="whisper-large-v3",
-            language="ur",
             response_format="text",
         )
     return str(result).strip()
@@ -92,7 +93,7 @@ def categorize(english_text: str, urdu_text: str = "", fallback_reporter_name: s
     """
     client = get_client()
 
-    KNOWN_LOCATIONS = """Substation 1, Utility Pump Area, Utility Tank Area, VCM LCR, VCM Pump House, VCM Tank Farm, General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard, Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area, LPG Bullet Storage, Acetic Acid Pump House, Acetic Acid Tank Farm Area, Acetic Acid Truck Loading Area, Admin Building, Central Control Room, Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop, Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room, Warehouse, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm, EDC Truck Loading Area, Jetty, Jetty Head, Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Mooring Dolphin, Jetty Trestle, Under Jetty, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
+    KNOWN_LOCATIONS = """Substation , Utility Pump Area, Utility Tank Area, VCM LCR, VCM Pump House, VCM Tank Farm, General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard, Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area, LPG Bullet Storage, Acetic Acid Pump House, Acetic Acid Tank Farm Area, Acetic Acid Truck Loading Area, Admin Building, Central Control Room, Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop, Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room, Warehouse, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm, EDC Truck Loading Area, Jetty, Jetty Head, Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Mooring Dolphin, Jetty Trestle, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
 
     system_prompt = (
         "You are a Health, Safety & Environment (HSE) assistant for an industrial site "
