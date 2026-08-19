@@ -146,8 +146,8 @@ def categorize(english_text: str, urdu_text: str = "", fallback_reporter_name: s
     if urdu_text:
         user_content += f"\n\nOriginal Urdu transcript (check this for names/details the translation may have dropped):\n{urdu_text}"
 
-    completion = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        completion = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
