@@ -27,18 +27,16 @@ def get_client():
 
 
 def transcribe_original(audio_path: str) -> str:
-    """Returns the original-language transcript. Language is auto-detected
-    (Urdu, Punjabi, or Sindhi) rather than forced, so each is transcribed
-    accurately in its own script."""
+    """Returns the Urdu-script transcript."""
     client = get_client()
     with open(audio_path, "rb") as f:
         result = client.audio.transcriptions.create(
             file=(os.path.basename(audio_path), f.read()),
             model="whisper-large-v3",
+            language="ur",
             response_format="text",
         )
     return str(result).strip()
-
 
 # kept for backwards compatibility with any existing callers
 transcribe_urdu = transcribe_original
