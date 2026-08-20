@@ -91,7 +91,7 @@ def categorize(english_text: str, urdu_text: str = "", fallback_reporter_name: s
     """
     client = get_client()
 
-    KNOWN_LOCATIONS = """Substation , Utility Pump Area, Utility Tank Area, VCM LCR, VCM Pump House, VCM Tank Farm, General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard, Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area, LPG Bullet Storage, Acetic Acid Pump House, Acetic Acid Tank Farm Area, Acetic Acid Truck Loading Area, Admin Building, Central Control Room, Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance BLD, Workshop, Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room, Warehouse, Warehouse B (China Yard), EDC Pump House, EDC Tank Farm, EDC Truck Loading Area, Jetty, Jetty Head, Jetty Intersection, Jetty Equipment Room, Jetty Switch Room, Mooring Dolphin, Jetty Trestle, Jetty Walkway North Side, Jetty Walkway South Side, Main Control Room"""
+    KNOWN_LOCATIONS = """Substation , Utility Pump Area, Utility Tank Area, VCM , General Weighbridge, LPG Weighbridge, Cable Yard, Chemical Yard, E&I Yard, Hazardous Yard, Parking Area, Pipe Yard, Scrap Yard, Salvage Yard, Waste Water Handling Area, LPG Bullet Storage, Acetic Acid, Admin Building, Central Control Room, Canteen, First Aid Room, Fire Station, Generator Room, Hose Room, Maintenance, Workshop, Main Gate, Record Room, Security Control Room, Admin Store, VCM Store, Training Room, Warehouse, Warehouse B (China Yard), EDC , Jetty, Main Control Room"""
 
     system_prompt = (
         "You are a Health, Safety & Environment (HSE) assistant for an industrial site "
