@@ -2,13 +2,11 @@
 
 Flask app: workers record a safety observation **in Urdu**, it's automatically
 transcribed, translated to English, categorized (Unsafe Act / Unsafe Condition /
-Near Miss / LTI + severity + location), the audio is saved to Google Drive, and
+Near Miss / LTI + severity + location), and
 everything shows up live on HSE and Admin dashboards (charts + log + filters),
 exactly like the sample "Bolo Safety Overview" you shared.
 
 ## 3 panels
-- **User** — see their own submissions. Recording no longer happens in the browser — it comes
-  from the external voice recorder (ASR) app via webhook (see below).
 - **HSE** — full analytics dashboard (all reporters), can edit category/severity/location/status.
 - **Admin** — everything HSE has, **plus** full CRUD (add/edit/delete any observation, delete audio),
   and user management (create/delete admin, hse, user accounts).
@@ -62,17 +60,6 @@ Then edit `.env`:
 5. Copy the folder ID from its URL (`drive.google.com/drive/folders/<THIS_PART>`) into
    `GOOGLE_DRIVE_FOLDER_ID` in `.env`.
 
-## 3. Initialize the database (creates demo users)
-
-```bash
-flask --app app.py init-db
-```
-This creates:
-| Role  | Username | Password  |
-|-------|----------|-----------|
-| Admin | admin    | admin123  |
-| HSE   | hse      | hse123    |
-| User  | worker   | worker123 |
 
 **Change these passwords / delete these accounts before going live.**
 
