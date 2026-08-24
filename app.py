@@ -17,6 +17,7 @@ import groq_service
 import drive_service
 import departments
 import email_service
+import threading
 
 load_dotenv()
 
@@ -308,16 +309,16 @@ def webhook_voice_observation():
         status="pending",
     )
 
-    db.session.add(obs)
+ db.session.add(obs)
     db.session.commit()
 
-    _notify_department(obs)
+    # Direct call hata kar sirf thread chalayein
+    threading.Thread(target=_notify_department, args=(obs,)).start()
 
     return jsonify({
         "success": True,
         "observation": obs.to_dict()
     }), 201
-
 
 @app.route("/hse")
 @roles_required("hse", "admin")
