@@ -1,6 +1,6 @@
 """
 Sends observation-notification emails via Resend API.
-Bypasses Render SMTP blocking completely without complex OAuth setup.
+Uses RESEND_API_KEY from Render environment.
 """
 
 import os
@@ -10,10 +10,15 @@ import urllib.error
 
 
 def send_observation_email(observation: dict, department: str, manager: str, manager_email: str) -> bool:
-    api_key = os.environ.get("RESEND_API_KEY", "re_9jH4Ek3n_FY3zVnfx6pWU8FkaBku1JBLM")
+    # Key sirf environment variable se li jayegi
+    api_key = os.environ.get("RESEND_API_KEY")
 
-    if not api_key or not manager_email:
-        print("--- EMAIL SKIPPED: Missing RESEND_API_KEY or manager_email ---")
+    if not api_key:
+        print("--- EMAIL SKIPPED: RESEND_API_KEY environment variable not found ---")
+        return False
+
+    if not manager_email:
+        print("--- EMAIL SKIPPED: Missing manager_email ---")
         return False
 
     subject = f"[Bolo Safety] New {observation.get('severity', 'Normal')} severity report — {observation.get('location') or 'Not specified'}"
@@ -54,7 +59,7 @@ def send_observation_email(observation: dict, department: str, manager: str, man
         "https://api.resend.com/emails",
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {api_key.strip()}",
             "Content-Type": "application/json"
         },
         method="POST"
