@@ -1,6 +1,6 @@
 """
 Sends notification emails directly via Gmail SMTP.
-No extra packages or domain verification needed.
+Uses Port 587 with STARTTLS and timeout to prevent Render worker timeouts.
 """
 
 import os
@@ -49,8 +49,9 @@ def send_observation_email(observation: dict, department: str, manager: str, man
     msg.attach(MIMEText(html_body, "html"))
 
     try:
-        # Gmail SMTP setup
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        # Port 587 with STARTTLS & 10s timeout prevents worker hanging
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+            server.starttls()
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, manager_email, msg.as_string())
         print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} VIA GMAIL ---")
