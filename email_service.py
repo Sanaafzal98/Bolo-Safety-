@@ -1,6 +1,6 @@
 """
 Sends observation-notification emails via Gmail SMTP.
-Set EMAIL_ADDRESS and EMAIL_APP_PASSWORD (or MAIL_USERNAME / MAIL_PASSWORD) in Render environment.
+Set EMAIL_ADDRESS and EMAIL_APP_PASSWORD in Render environment.
 """
 
 import os
@@ -8,20 +8,18 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Port 465 (SSL) Render par port 587 se ziada reliable aur fast hai
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 465
+SMTP_PORT = 587  # Standard TLS Port for Render
 
 
 def send_observation_email(observation: dict, department: str, manager: str, manager_email: str) -> bool:
     """observation is a dict like Observation.to_dict(). Returns True if sent."""
     
-    # Fallback support agar Render par MAIL_USERNAME/MAIL_PASSWORD ke naam se variables hon
     sender = os.environ.get("EMAIL_ADDRESS") or os.environ.get("MAIL_USERNAME")
     app_password = os.environ.get("EMAIL_APP_PASSWORD") or os.environ.get("MAIL_PASSWORD")
 
     if not sender or not app_password or not manager_email:
-        print("--- EMAIL SKIPPED: Missing sender, app_password, or manager_email ---")
+        print("--- EMAIL SKIPPED: Missing credentials or recipient ---")
         return False
 
     subject = f"[Bolo Safety] New {observation.get('severity', 'Normal')} severity report — {observation.get('location') or 'Not specified'}"
@@ -58,8 +56,11 @@ def send_observation_email(observation: dict, department: str, manager: str, man
     msg.attach(MIMEText(html_body, "html"))
 
     try:
-        # SMTP_SSL aur timeout=10 Worker Timeout issue fix karta hai
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+        # Port 587 with starttls and strict timeout
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
             server.login(sender, app_password)
             server.sendmail(sender, [manager_email], msg.as_string())
         print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} ---")
