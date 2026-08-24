@@ -1,20 +1,20 @@
 """
-Sends observation-notification emails via Resend API.
-Uses RESEND_API_KEY from Render environment.
+Sends notification emails directly via Gmail SMTP.
+No extra packages or domain verification needed.
 """
 
 import os
-import json
-import urllib.request
-import urllib.error
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 
 def send_observation_email(observation: dict, department: str, manager: str, manager_email: str) -> bool:
-    # Key sirf environment variable se li jayegi
-    api_key = os.environ.get("RESEND_API_KEY")
+    sender_email = os.environ.get("SMTP_EMAIL")
+    sender_password = os.environ.get("SMTP_PASSWORD")
 
-    if not api_key:
-        print("--- EMAIL SKIPPED: RESEND_API_KEY environment variable not found ---")
+    if not sender_email or not sender_password:
+        print("--- EMAIL SKIPPED: Missing SMTP_EMAIL or SMTP_PASSWORD in env ---")
         return False
 
     if not manager_email:
@@ -48,31 +48,18 @@ def send_observation_email(observation: dict, department: str, manager: str, man
     </div>
     """
 
-    payload = {
-        "from": "Bolo Safety <onboarding@resend.dev>",
-        "to": [manager_email],
-        "subject": subject,
-        "html": html_body
-    }
-
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key.strip()}",
-            "Content-Type": "application/json"
-        },
-        method="POST"
-    )
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"Bolo Safety <{sender_email}>"
+    msg["To"] = manager_email
+    msg.attach(MIMEText(html_body, "html"))
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status in [200, 201]:
-                print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} VIA RESEND ---")
-                return True
-    except urllib.error.HTTPError as e:
-        print(f"--- EMAIL FAILED (HTTP {e.code}): {e.read().decode('utf-8')} ---")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, manager_email, msg.as_string())
+        print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} VIA GMAIL ---")
+        return True
     except Exception as e:
-        print(f"--- EMAIL FAILED: {e} ---")
-
-    return False
+        print(f"--- EMAIL FAILED VIA GMAIL: {e} ---")
+        return False
