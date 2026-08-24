@@ -17,7 +17,7 @@ class User(db.Model, UserMixin):
     name = db.Column(db.String(120), nullable=False)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default="user")  # admin / hse / user
+    role = db.Column(db.String(20), nullable=False, default="user")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     observations = db.relationship("Observation", backref="reporter", lazy=True)
@@ -29,7 +29,12 @@ class User(db.Model, UserMixin):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
-        return {"id": self.id, "name": self.name, "username": self.username, "role": self.role}
+        return {
+            "id": self.id,
+            "name": self.name,
+            "username": self.username,
+            "role": self.role
+        }
 
 
 class Observation(db.Model):
@@ -43,21 +48,27 @@ class Observation(db.Model):
     category = db.Column(db.String(30), nullable=False, default="Not specified")
     severity = db.Column(db.String(20), nullable=False, default="Not specified")
     location = db.Column(db.String(120), nullable=True)
+    department = db.Column(db.String(50), nullable=True)
 
     urdu_script = db.Column(db.Text, nullable=True)
     english_translation = db.Column(db.Text, nullable=True)
 
-    audio_filename = db.Column(db.String(255), nullable=True)   # local filename backup
+    audio_filename = db.Column(db.String(255), nullable=True)
     drive_file_id = db.Column(db.String(255), nullable=True)
     drive_link = db.Column(db.String(500), nullable=True)
 
-    status = db.Column(db.String(20), nullable=False, default="pending")  # pending / reviewed / closed
+    status = db.Column(db.String(20), nullable=False, default="pending")
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
 
     def to_dict(self):
         pkt_time = self.created_at + timedelta(hours=5) if self.created_at else None
+
         return {
             "id": self.id,
             "reporter_id": self.reporter_id,
@@ -65,6 +76,7 @@ class Observation(db.Model):
             "category": self.category,
             "severity": self.severity,
             "location": self.location,
+            "department": self.department,
             "urdu_script": self.urdu_script,
             "english_translation": self.english_translation,
             "audio_filename": self.audio_filename,
