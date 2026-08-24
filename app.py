@@ -17,7 +17,6 @@ import groq_service
 import drive_service
 import departments
 import email_service
-import threading
 
 load_dotenv()
 
@@ -33,19 +32,17 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(DATA_DIR, "i
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
-# --- Security hardening ---
-app.config["SESSION_COOKIE_SECURE"] = True      # cookie only sent over HTTPS
-app.config["SESSION_COOKIE_HTTPONLY"] = True     # JavaScript can't read the session cookie
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"    # blocks most cross-site cookie theft
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)  # auto-logout after 8h idle
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 
 db.init_app(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
-# --- Brute-force login protection (in-memory, per-username) ---
-_failed_logins = {}  # { username: {"count": int, "locked_until": datetime|None} }
+_failed_logins = {}
 MAX_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 
@@ -102,14 +99,8 @@ def login():
 
         locked_until = _is_locked(username)
         if locked_until:
-            minutes_left = max(
-                1,
-                int((locked_until - datetime.utcnow()).total_seconds() // 60) + 1
-            )
-            flash(
-                f"Too many failed attempts. Try again in {minutes_left} minute(s).",
-                "error"
-            )
+            minutes_left = max(1, int((locked_until - datetime.utcnow()).total_seconds() // 60) + 1)
+            flash(f"Too many failed attempts. Try again in {minutes_left} minute(s).", "error")
             return render_template("login.html")
 
         user = User.query.filter_by(username=username).first()
@@ -118,10 +109,8 @@ def login():
             session.permanent = True
             login_user(user)
             return redirect(url_for("dashboard_redirect"))
-
         _record_failed_login(username)
         flash("Invalid username or password.", "error")
-
     return render_template("login.html")
 
 
@@ -154,33 +143,23 @@ def user_dashboard():
 
 
 def _notify_department(obs):
-    """Look up the manager for this observation's location and email them.
-    Never blocks/fails the observation save if email sending has an issue."""
+    """Look up the manager for this observation's location, save the
+    department, and email them. Wrapped so it can never crash the request —
+    the observation is already saved by the time this runs."""
     try:
-        # Location mapping check
         info = departments.get_location_info(obs.location or "")
-        
-        # Fallback agar location list mein na mile ya mapping miss ho
-        dept = info["department"] if info else "General"
-        mgr = info["manager"] if info else "HSE Team"
-        mgr_email = info["manager_email"] if info else "trysana9871235@gmail.com"
+        dept = info["department"] if info else None
+        mgr = info["manager"] if info else None
+        mgr_email = info["manager_email"] if info else None
 
-        # Department update karein database mein
-        obs.department = dept
-        db.session.commit()
+        if dept:
+            obs.department = dept
+            db.session.commit()
 
-        # Render logs ke liye debug message
-        print(f"--- ATTEMPTING EMAIL TO: {mgr_email} FOR LOCATION: {obs.location} ---")
-
-        # Fixed function call with exact arguments
-        success = email_service.send_observation_email(
-            obs.to_dict(),
-            dept,
-            mgr,
-            mgr_email
-        )
-        print(f"--- EMAIL RESULT: {success} ---")
-
+        if mgr_email:
+            print(f"--- ATTEMPTING EMAIL TO: {mgr_email} FOR LOCATION: {obs.location} ---")
+            success = email_service.send_observation_email(obs.to_dict(), dept, mgr, mgr_email)
+            print(f"--- EMAIL RESULT: {success} ---")
     except Exception as e:
         app.logger.warning(f"Department notification failed: {e}")
         print(f"--- DEPARTMENT NOTIFICATION ERROR: {e} ---")
@@ -193,17 +172,12 @@ def _save_audio_and_process(audio_file, fallback_reporter_name=""):
     audio_file.save(local_path)
 
     result = groq_service.process_audio_report(
-        local_path,
-        fallback_reporter_name=fallback_reporter_name
+        local_path, fallback_reporter_name=fallback_reporter_name
     )
 
     drive_id, drive_link = None, None
-
     try:
-        drive_id, drive_link = drive_service.upload_audio(
-            local_path,
-            filename
-        )
+        drive_id, drive_link = drive_service.upload_audio(local_path, filename)
     except Exception as e:
         app.logger.warning(f"Drive upload failed: {e}")
 
@@ -217,87 +191,52 @@ def webhook_debug():
         "headers": dict(request.headers),
         "form_fields": {k: v for k, v in request.form.items()},
         "files_received": [
-            {
-                "field_name": k,
-                "filename": f.filename,
-                "content_type": f.content_type
-            }
+            {"field_name": k, "filename": f.filename, "content_type": f.content_type}
             for k, f in request.files.items()
         ],
-        "raw_body_length": (
-            len(request.get_data())
-            if not request.form and not request.files
-            else None
-        ),
+        "raw_body_length": len(request.get_data()) if not request.form and not request.files else None,
     }
-
     app.logger.info(f"WEBHOOK DEBUG: {info}")
     print(f"--- Incoming webhook-debug request ---\n{info}\n")
-
     return jsonify(info), 200
 
 
 @app.route("/api/webhook/voice-observation", methods=["POST"])
 def webhook_voice_observation():
     expected_key = os.environ.get("WEBHOOK_API_KEY")
-
     if expected_key:
         provided_key = (
             request.headers.get("X-Webhook-Key")
             or request.form.get("api_key")
             or request.form.get("secret")
         )
-
         if provided_key != expected_key:
             return jsonify({"error": "Unauthorized"}), 401
 
     audio_file = request.files.get("audio") or request.files.get("file")
-
     if not audio_file or audio_file.filename == "":
-        return jsonify({
-            "status": "ok",
-            "note": "Connected. No audio in this request."
-        }), 200
+        return jsonify({"status": "ok", "note": "Connected. No audio in this request."}), 200
 
     reporter_name = request.form.get("reporter_name", "").strip()
     reporter_username = request.form.get("username", "").strip()
 
     reporter = None
-
     if reporter_username:
-        reporter = User.query.filter_by(
-            username=reporter_username
-        ).first()
+        reporter = User.query.filter_by(username=reporter_username).first()
 
     try:
         result, filename, drive_id, drive_link = _save_audio_and_process(
-            audio_file,
-            fallback_reporter_name=(
-                reporter_name or (reporter.name if reporter else "")
-            )
+            audio_file, fallback_reporter_name=reporter_name or (reporter.name if reporter else "")
         )
-
     except Exception as e:
         import traceback
-
-        app.logger.error(
-            "WEBHOOK PROCESSING FAILED:\n" + traceback.format_exc()
-        )
-        print(
-            "WEBHOOK PROCESSING FAILED:\n" + traceback.format_exc()
-        )
-
-        return jsonify({
-            "error": f"AI processing failed: {e}"
-        }), 500
+        app.logger.error("WEBHOOK PROCESSING FAILED:\n" + traceback.format_exc())
+        print("WEBHOOK PROCESSING FAILED:\n" + traceback.format_exc())
+        return jsonify({"error": f"AI processing failed: {e}"}), 500
 
     obs = Observation(
         reporter_id=reporter.id if reporter else None,
-        reporter_name=(
-            result["reporter_name"]
-            or reporter_name
-            or (reporter.name if reporter else "Anonymous")
-        ),
+        reporter_name=result["reporter_name"] or reporter_name or (reporter.name if reporter else "Anonymous"),
         category=result["category"],
         severity=result["severity"],
         location=result["location"],
@@ -308,17 +247,13 @@ def webhook_voice_observation():
         drive_link=drive_link,
         status="pending",
     )
-
- db.session.add(obs)
+    db.session.add(obs)
     db.session.commit()
 
-    # Direct call hata kar sirf thread chalayein
-    threading.Thread(target=_notify_department, args=(obs,)).start()
+    _notify_department(obs)
 
-    return jsonify({
-        "success": True,
-        "observation": obs.to_dict()
-    }), 201
+    return jsonify({"success": True, "observation": obs.to_dict()}), 201
+
 
 @app.route("/hse")
 @roles_required("hse", "admin")
@@ -331,20 +266,11 @@ def hse_dashboard():
 def hse_update_observation(obs_id):
     obs = Observation.query.get_or_404(obs_id)
     data = request.get_json(force=True)
-
-    for field in (
-        "category",
-        "severity",
-        "location",
-        "status",
-        "reporter_name"
-    ):
+    for field in ("category", "severity", "location", "status", "reporter_name"):
         if field in data:
             setattr(obs, field, data[field])
-
     obs.updated_at = datetime.utcnow()
     db.session.commit()
-
     return jsonify(obs.to_dict())
 
 
@@ -352,11 +278,7 @@ def hse_update_observation(obs_id):
 @roles_required("admin")
 def admin_dashboard():
     users = User.query.order_by(User.created_at.desc()).all()
-    return render_template(
-        "admin_dashboard.html",
-        role="admin",
-        users=users
-    )
+    return render_template("admin_dashboard.html", role="admin", users=users)
 
 
 @app.route("/admin/observations/<int:obs_id>", methods=["PUT"])
@@ -364,22 +286,12 @@ def admin_dashboard():
 def admin_update_observation(obs_id):
     obs = Observation.query.get_or_404(obs_id)
     data = request.get_json(force=True)
-
-    for field in (
-        "category",
-        "severity",
-        "location",
-        "status",
-        "reporter_name",
-        "urdu_script",
-        "english_translation"
-    ):
+    for field in ("category", "severity", "location", "status", "reporter_name",
+                  "urdu_script", "english_translation"):
         if field in data:
             setattr(obs, field, data[field])
-
     obs.updated_at = datetime.utcnow()
     db.session.commit()
-
     return jsonify(obs.to_dict())
 
 
@@ -387,22 +299,14 @@ def admin_update_observation(obs_id):
 @roles_required("admin")
 def admin_delete_observation(obs_id):
     obs = Observation.query.get_or_404(obs_id)
-
     if obs.drive_file_id:
         drive_service.delete_audio(obs.drive_file_id)
-
     if obs.audio_filename:
-        local_path = os.path.join(
-            UPLOAD_DIR,
-            obs.audio_filename
-        )
-
+        local_path = os.path.join(UPLOAD_DIR, obs.audio_filename)
         if os.path.exists(local_path):
             os.remove(local_path)
-
     db.session.delete(obs)
     db.session.commit()
-
     return jsonify({"deleted": True})
 
 
@@ -410,7 +314,6 @@ def admin_delete_observation(obs_id):
 @roles_required("admin")
 def admin_create_observation():
     data = request.get_json(force=True)
-
     obs = Observation(
         reporter_id=None,
         reporter_name=data.get("reporter_name", "Unknown"),
@@ -421,12 +324,9 @@ def admin_create_observation():
         english_translation=data.get("english_translation", ""),
         status="pending",
     )
-
     db.session.add(obs)
     db.session.commit()
-
     _notify_department(obs)
-
     return jsonify(obs.to_dict()), 201
 
 
@@ -434,27 +334,16 @@ def admin_create_observation():
 @roles_required("admin")
 def admin_create_user():
     data = request.get_json(force=True)
-
-    if User.query.filter_by(
-        username=data.get("username")
-    ).first():
-        return jsonify({
-            "error": "Username already exists"
-        }), 400
-
+    if User.query.filter_by(username=data.get("username")).first():
+        return jsonify({"error": "Username already exists"}), 400
     user = User(
         name=data.get("name", ""),
         username=data.get("username", ""),
         role=data.get("role", "user"),
     )
-
-    user.set_password(
-        data.get("password", "changeme123")
-    )
-
+    user.set_password(data.get("password", "changeme123"))
     db.session.add(user)
     db.session.commit()
-
     return jsonify(user.to_dict()), 201
 
 
@@ -462,15 +351,10 @@ def admin_create_user():
 @roles_required("admin")
 def admin_delete_user(user_id):
     if user_id == current_user.id:
-        return jsonify({
-            "error": "You cannot delete your own account"
-        }), 400
-
+        return jsonify({"error": "You cannot delete your own account"}), 400
     user = User.query.get_or_404(user_id)
-
     db.session.delete(user)
     db.session.commit()
-
     return jsonify({"deleted": True})
 
 
@@ -478,51 +362,32 @@ def admin_delete_user(user_id):
 @roles_required("hse", "admin")
 def api_observations():
     q = Observation.query
-
     category = request.args.get("category")
     severity = request.args.get("severity")
     reporter = request.args.get("reporter")
     department = request.args.get("department")
-
     if category:
         q = q.filter(Observation.category == category)
-
     if severity:
         q = q.filter(Observation.severity == severity)
-
     if reporter:
         q = q.filter(Observation.reporter_name == reporter)
-
     if department:
         q = q.filter(Observation.department == department)
-
-    observations = q.order_by(
-        Observation.created_at.desc()
-    ).all()
-
-    return jsonify([
-        o.to_dict()
-        for o in observations
-    ])
+    observations = q.order_by(Observation.created_at.desc()).all()
+    return jsonify([o.to_dict() for o in observations])
 
 
 @app.route("/api/observations/<int:obs_id>/audio")
 @login_required
 def api_get_audio(obs_id):
     obs = Observation.query.get_or_404(obs_id)
-
     if current_user.role == "user" and obs.reporter_id != current_user.id:
         abort(403)
-
     if obs.drive_link:
         return redirect(obs.drive_link)
-
     if obs.audio_filename:
-        return send_from_directory(
-            UPLOAD_DIR,
-            obs.audio_filename
-        )
-
+        return send_from_directory(UPLOAD_DIR, obs.audio_filename)
     abort(404)
 
 
@@ -533,49 +398,28 @@ def export_csv():
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 
-    observations = Observation.query.order_by(
-        Observation.created_at.desc()
-    ).all()
+    observations = Observation.query.order_by(Observation.created_at.desc()).all()
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Observations"
 
-    headers = [
-        "TIME",
-        "REPORTER",
-        "CATEGORY",
-        "SEVERITY",
-        "LOCATION",
-        "URDU SCRIPT",
-        "ENGLISH TRANSLATION",
-        "STATUS"
-    ]
-
+    headers = ["TIME", "REPORTER", "CATEGORY", "SEVERITY", "LOCATION", "DEPARTMENT",
+               "URDU SCRIPT", "ENGLISH TRANSLATION", "STATUS"]
     ws.append(headers)
-
     for cell in ws[1]:
         cell.font = Font(bold=True)
-        cell.fill = PatternFill(
-            start_color="DDDDDD",
-            end_color="DDDDDD",
-            fill_type="solid"
-        )
+        cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
 
     for o in observations:
-        pkt_time = (
-            o.created_at + timedelta(hours=5)
-            if o.created_at
-            else None
-        )
-
+        pkt_time = (o.created_at + timedelta(hours=5)) if o.created_at else None
         ws.append([
-            pkt_time.strftime("%d %b, %H:%M")
-            if pkt_time else "",
+            pkt_time.strftime("%d %b, %H:%M") if pkt_time else "",
             o.reporter_name or "",
             o.category or "",
             o.severity or "",
             o.location or "",
+            o.department or "",
             o.urdu_script or "",
             o.english_translation or "",
             o.status or "",
@@ -583,15 +427,9 @@ def export_csv():
 
     ws.auto_filter.ref = ws.dimensions
 
-    widths = [
-        16, 18, 16, 12,
-        16, 40, 45, 12
-    ]
-
+    widths = [16, 18, 16, 12, 16, 14, 40, 45, 12]
     for i, w in enumerate(widths, start=1):
-        ws.column_dimensions[
-            ws.cell(row=1, column=i).column_letter
-        ].width = w
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -600,46 +438,26 @@ def export_csv():
     return Response(
         buf.getvalue(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition":
-            "attachment; filename=observation_log.xlsx"
-        }
+        headers={"Content-Disposition": "attachment; filename=observation_log.xlsx"},
     )
 
 
 @app.cli.command("init-db")
 def init_db():
     db.create_all()
-
     if not User.query.filter_by(username="admin").first():
-        admin = User(
-            name="Site Admin",
-            username="admin",
-            role="admin"
-        )
+        admin = User(name="Site Admin", username="admin", role="admin")
         admin.set_password("admin123")
         db.session.add(admin)
-
     if not User.query.filter_by(username="hse").first():
-        hse = User(
-            name="HSE Officer",
-            username="hse",
-            role="hse"
-        )
+        hse = User(name="HSE Officer", username="hse", role="hse")
         hse.set_password("hse123")
         db.session.add(hse)
-
     if not User.query.filter_by(username="worker").first():
-        worker = User(
-            name="Site Worker",
-            username="worker",
-            role="user"
-        )
+        worker = User(name="Site Worker", username="worker", role="user")
         worker.set_password("worker123")
         db.session.add(worker)
-
     db.session.commit()
-
     print("Database initialised.")
     print("Admin login:  admin / admin123")
     print("HSE login:    hse / hse123")
@@ -648,42 +466,17 @@ def init_db():
 
 if __name__ == "__main__":
     with app.app_context():
-        os.makedirs(
-            os.path.join(BASE_DIR, "instance"),
-            exist_ok=True
-        )
-
+        os.makedirs(os.path.join(BASE_DIR, "instance"), exist_ok=True)
         db.create_all()
-
         if not User.query.filter_by(username="admin").first():
-            admin = User(
-                name="Site Admin",
-                username="admin",
-                role="admin"
-            )
+            admin = User(name="Site Admin", username="admin", role="admin")
             admin.set_password("admin123")
             db.session.add(admin)
-
-            hse = User(
-                name="HSE Officer",
-                username="hse",
-                role="hse"
-            )
+            hse = User(name="HSE Officer", username="hse", role="hse")
             hse.set_password("hse123")
             db.session.add(hse)
-
-            worker = User(
-                name="Site Worker",
-                username="worker",
-                role="user"
-            )
+            worker = User(name="Site Worker", username="worker", role="user")
             worker.set_password("worker123")
             db.session.add(worker)
-
             db.session.commit()
-
-    app.run(
-        debug=os.environ.get("FLASK_DEBUG", "1") == "1",
-        host="0.0.0.0",
-        port=5000
-    )
+    app.run(debug=os.environ.get("FLASK_DEBUG", "1") == "1", host="0.0.0.0", port=5000)
