@@ -160,13 +160,15 @@ LOCATION_INFO = {
 }
 
 # manager name -> email address. TESTING: everyone routes to the same inbox
-# for now. Replace each value with the real manager email when ready.
+# for now (bolosafety@gmail.com — the Resend account's own address, since the
+# sending domain isn't verified yet, so Resend only allows delivery there).
+# Replace each value with the real manager email once the domain is verified.
 MANAGER_EMAILS = {
-    "Kaleem": "trysana9871235@gmail.com",
-    "Faisal": "trysana9871235@gmail.com",
-    "Kamran": "trysana9871235@gmail.com",
-    "Sajid": "trysana9871235@gmail.com",
-    "Qasim": "trysana9871235@gmail.com",
+    "Kaleem": "bolosafety@gmail.com",
+    "Faisal": "bolosafety@gmail.com",
+    "Kamran": "bolosafety@gmail.com",
+    "Sajid": "bolosafety@gmail.com",
+    "Qasim": "bolosafety@gmail.com",
 }
 
 ALL_DEPARTMENTS = ["Admin", "Electrical", "HSE", "Mechanical", "Ops", "Operations", "Warehouse"]
