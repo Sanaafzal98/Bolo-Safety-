@@ -1,18 +1,20 @@
 """
-Sends observation-notification emails via Resend API.
+Sends notification emails directly via Gmail SMTP.
+No extra packages or domain verification needed.
 """
 
 import os
-import json
-import urllib.request
-import urllib.error
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 
 def send_observation_email(observation: dict, department: str, manager: str, manager_email: str) -> bool:
-    api_key = os.environ.get("RESEND_API_KEY")
+    sender_email = os.environ.get("SMTP_EMAIL")
+    sender_password = os.environ.get("SMTP_PASSWORD")
 
-    if not api_key:
-        print("--- EMAIL SKIPPED: Missing RESEND_API_KEY ---")
+    if not sender_email or not sender_password:
+        print("--- EMAIL SKIPPED: Missing SMTP_EMAIL or SMTP_PASSWORD in env ---")
         return False
 
     if not manager_email:
@@ -35,42 +37,24 @@ def send_observation_email(observation: dict, department: str, manager: str, man
           <tr><td style="padding: 8px 0; color: #666;">Severity</td><td style="padding: 8px 0; font-weight: bold; color: {'#e03131' if observation.get('severity')=='High' else '#f08c00' if observation.get('severity')=='Medium' else '#2f9e44'};">{observation.get('severity', 'N/A')}</td></tr>
           <tr><td style="padding: 8px 0; color: #666;">Location</td><td style="padding: 8px 0; font-weight: bold;">{observation.get('location', 'N/A')}</td></tr>
           <tr><td style="padding: 8px 0; color: #666;">Reported by</td><td style="padding: 8px 0;">{observation.get('reporter_name', 'N/A')}</td></tr>
-          <tr><td style="padding: 8px 0; color: #666;">Time</td><td style="padding: 8px 0;">{observation.get('created_at', 'N/A')}</td></tr>
         </table>
-        <p style="background: #f5f5f5; padding: 14px; border-radius: 6px; border-left: 3px solid #ff9f43;">
-          {observation.get('english_translation', 'No description available')}
-        </p>
-        <p style="margin-top: 24px;">Please review and action this in the Bolo Safety dashboard at your earliest convenience.</p>
-        <p style="color: #999; font-size: 12px; margin-top: 32px;">This is an automated notification from Bolo Safety. Please do not reply to this email.</p>
       </div>
     </div>
     """
 
-    payload = {
-        "from": "Bolo Safety <onboarding@resend.dev>",
-        "to": [manager_email],
-        "subject": subject,
-        "html": html_body
-    }
-
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key.strip()}",
-            "Content-Type": "application/json"
-        },
-        method="POST"
-    )
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"Bolo Safety <{sender_email}>"
+    msg["To"] = manager_email
+    msg.attach(MIMEText(html_body, "html"))
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status in [200, 201]:
-                print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} VIA RESEND ---")
-                return True
-    except urllib.error.HTTPError as e:
-        print(f"--- EMAIL FAILED (HTTP {e.code}): {e.read().decode('utf-8')} ---")
+        # Gmail SMTP setup
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, manager_email, msg.as_string())
+        print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} VIA GMAIL ---")
+        return True
     except Exception as e:
-        print(f"--- EMAIL FAILED: {e} ---")
-
-    return False
+        print(f"--- EMAIL FAILED VIA GMAIL: {e} ---")
+        return False
