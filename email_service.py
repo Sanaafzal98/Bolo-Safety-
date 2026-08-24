@@ -1,22 +1,29 @@
 """
-Sends observation-notification emails via Gmail SMTP.
-Uses port 587 + STARTTLS with a short timeout so a slow/blocked connection
-can never hang the web server (which previously caused worker crashes).
-Set EMAIL_ADDRESS and EMAIL_APP_PASSWORD in your Render environment.
+Sends observation-notification emails via the Resend HTTPS API
+(https://resend.com). Render blocks outbound SMTP (port 587/465), which is
+why the old Gmail-SMTP version failed with "[Errno 101] Network is
+unreachable". Resend's API runs over plain HTTPS (port 443), which Render
+always allows outbound.
+
+Set RESEND_API_KEY in your Render environment.
+
+NOTE (testing phase): until a custom domain is verified on Resend, the
+"onboarding@resend.dev" sender can only deliver to the email address the
+Resend account itself was created with (bolosafety@gmail.com). Sending to
+any other address will fail with a 403 until the domain is verified.
 """
 
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
+
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def send_observation_email(observation: dict, department: str, manager: str, manager_email: str) -> bool:
-    sender = os.environ.get("EMAIL_ADDRESS")
-    app_password = os.environ.get("EMAIL_APP_PASSWORD")
+    api_key = os.environ.get("RESEND_API_KEY")
 
-    if not sender or not app_password:
-        print("--- EMAIL SKIPPED: EMAIL_ADDRESS or EMAIL_APP_PASSWORD not set ---")
+    if not api_key:
+        print("--- EMAIL SKIPPED: RESEND_API_KEY not set ---")
         return False
     if not manager_email:
         print("--- EMAIL SKIPPED: no manager_email ---")
@@ -48,19 +55,25 @@ def send_observation_email(observation: dict, department: str, manager: str, man
     </div>
     """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"Bolo Safety <{sender}>"
-    msg["To"] = manager_email
-    msg.attach(MIMEText(html_body, "html"))
+    payload = {
+        "from": "Bolo Safety <onboarding@resend.dev>",
+        "to": [manager_email],
+        "subject": subject,
+        "html": html_body,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-            server.starttls()
-            server.login(sender, app_password)
-            server.sendmail(sender, [manager_email], msg.as_string())
-        print(f"--- EMAIL SENT to {manager_email} ---")
-        return True
+        print(f"--- ATTEMPTING EMAIL TO: {manager_email} FOR LOCATION: {observation.get('location')} ---")
+        resp = requests.post(RESEND_API_URL, json=payload, headers=headers, timeout=10)
+        if resp.status_code in (200, 201, 202):
+            print(f"--- EMAIL SENT to {manager_email} (id: {resp.json().get('id')}) ---")
+            return True
+        print(f"--- EMAIL FAILED: {resp.status_code} {resp.text} ---")
+        return False
     except Exception as e:
         print(f"--- EMAIL FAILED: {e} ---")
         return False
