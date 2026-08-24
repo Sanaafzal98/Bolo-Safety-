@@ -1,25 +1,19 @@
 """
-Sends observation-notification emails via Gmail SMTP.
-Set EMAIL_ADDRESS and EMAIL_APP_PASSWORD in Render environment.
+Sends observation-notification emails via Resend API.
+Bypasses Render SMTP blocking completely without complex OAuth setup.
 """
 
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587  # Standard TLS Port for Render
+import json
+import urllib.request
+import urllib.error
 
 
 def send_observation_email(observation: dict, department: str, manager: str, manager_email: str) -> bool:
-    """observation is a dict like Observation.to_dict(). Returns True if sent."""
-    
-    sender = os.environ.get("EMAIL_ADDRESS") or os.environ.get("MAIL_USERNAME")
-    app_password = os.environ.get("EMAIL_APP_PASSWORD") or os.environ.get("MAIL_PASSWORD")
+    api_key = os.environ.get("RESEND_API_KEY", "re_9jH4Ek3n_FY3zVnfx6pWU8FkaBku1JBLM")
 
-    if not sender or not app_password or not manager_email:
-        print("--- EMAIL SKIPPED: Missing credentials or recipient ---")
+    if not api_key or not manager_email:
+        print("--- EMAIL SKIPPED: Missing RESEND_API_KEY or manager_email ---")
         return False
 
     subject = f"[Bolo Safety] New {observation.get('severity', 'Normal')} severity report — {observation.get('location') or 'Not specified'}"
@@ -49,22 +43,31 @@ def send_observation_email(observation: dict, department: str, manager: str, man
     </div>
     """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"Bolo Safety <{sender}>"
-    msg["To"] = manager_email
-    msg.attach(MIMEText(html_body, "html"))
+    payload = {
+        "from": "Bolo Safety <onboarding@resend.dev>",
+        "to": [manager_email],
+        "subject": subject,
+        "html": html_body
+    }
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
 
     try:
-        # Port 587 with starttls and strict timeout
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(sender, app_password)
-            server.sendmail(sender, [manager_email], msg.as_string())
-        print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} ---")
-        return True
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status in [200, 201]:
+                print(f"--- EMAIL SENT SUCCESSFULLY TO {manager_email} VIA RESEND ---")
+                return True
+    except urllib.error.HTTPError as e:
+        print(f"--- EMAIL FAILED (HTTP {e.code}): {e.read().decode('utf-8')} ---")
     except Exception as e:
-        print(f"--- EMAIL SEND FAILED: {e} ---")
-        return False
+        print(f"--- EMAIL FAILED: {e} ---")
+
+    return False
