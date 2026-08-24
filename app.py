@@ -156,22 +156,33 @@ def _notify_department(obs):
     """Look up the manager for this observation's location and email them.
     Never blocks/fails the observation save if email sending has an issue."""
     try:
+        # Location mapping check
         info = departments.get_location_info(obs.location or "")
-        if not info:
-            return
+        
+        # Fallback agar location list mein na mile ya mapping miss ho
+        dept = info["department"] if info else "General"
+        mgr = info["manager"] if info else "HSE Team"
+        mgr_email = info["manager_email"] if info else "trysana9871235@gmail.com"
 
-        obs.department = info["department"]
+        # Department update karein database mein
+        obs.department = dept
         db.session.commit()
 
-        email_service.send_observation_email(
+        # Render logs ke liye debug message
+        print(f"--- ATTEMPTING EMAIL TO: {mgr_email} FOR LOCATION: {obs.location} ---")
+
+        # Fixed function call with exact arguments
+        success = email_service.send_observation_email(
             obs.to_dict(),
-            info["department"],
-            info["manager"],
-            info["manager_email"]
+            dept,
+            mgr,
+            mgr_email
         )
+        print(f"--- EMAIL RESULT: {success} ---")
 
     except Exception as e:
         app.logger.warning(f"Department notification failed: {e}")
+        print(f"--- DEPARTMENT NOTIFICATION ERROR: {e} ---")
 
 
 def _save_audio_and_process(audio_file, fallback_reporter_name=""):
