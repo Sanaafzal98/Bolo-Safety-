@@ -2,7 +2,7 @@
 
   <div class="dash-header">
     <div>
-      <h1>Bolo Safety Overview</h1>
+      <h1>{% if role == 'manager' %}{{ current_user.manager_name }}'s Observations{% else %}Bolo Safety Overview{% endif %}</h1>
       <p class="muted" id="obs-count-label">Loading observations…</p>
     </div>
     <div class="dash-actions">
@@ -62,11 +62,11 @@
   <div class="log-card">
     <h2>User Management</h2>
     <table class="log-table">
-      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Manager</th><th></th></tr></thead>
       <tbody>
         {% for u in users %}
         <tr>
-          <td>{{ u.name }}</td><td>{{ u.username }}</td><td>{{ u.role }}</td>
+          <td>{{ u.name }}</td><td>{{ u.username }}</td><td>{{ u.role }}</td><td>{{ u.manager_name or '' }}</td>
           <td>{% if u.id != current_user.id %}<button class="btn-danger-sm" onclick="deleteUser({{ u.id }})">Delete</button>{% endif %}</td>
         </tr>
         {% endfor %}
@@ -87,7 +87,9 @@
     <select id="edit-category"><option>Unsafe Act</option><option>Unsafe Condition</option><option>Near Miss</option><option>LTI</option></select>
     <label>Severity</label>
     <select id="edit-severity"><option>High</option><option>Medium</option><option>Low</option><option>Not specified</option></select>
+    {% if role != 'manager' %}
     <label>Location</label><input id="edit-location" type="text">
+    {% endif %}
     <label>Status</label>
     <select id="edit-status"><option>pending</option><option>reviewed</option><option>closed</option></select>
     <div class="modal-actions">
@@ -124,7 +126,18 @@
     <label>Username</label><input id="new-user-username" type="text">
     <label>Password</label><input id="new-user-password" type="text" value="changeme123">
     <label>Role</label>
-    <select id="new-user-role"><option value="user">User</option><option value="hse">HSE</option><option value="admin">Admin</option></select>
+    <select id="new-user-role">
+      <option value="user">User</option>
+      <option value="hse">HSE</option>
+      <option value="manager">Manager</option>
+      <option value="admin">Admin</option>
+    </select>
+    <div id="new-user-manager-row" style="display:none;">
+      <label>Assigned manager (which department dashboard)</label>
+      <select id="new-user-manager-name">
+        {% for m in managers %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+    </div>
     <div class="modal-actions">
       <button id="new-user-cancel-btn" class="btn-ghost">Cancel</button>
       <button id="new-user-save-btn" class="btn-primary">Create user</button>
