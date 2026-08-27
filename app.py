@@ -39,6 +39,38 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 
 db.init_app(app)
 
+
+def _run_light_migrations():
+    """SQLite doesn't get new columns from db.create_all() alone once a table
+    already exists. This adds any columns introduced after the initial
+    deploy, so upgrading in place (without wiping the database) doesn't crash
+    with 'no such column'. Safe to run every startup — it's a no-op once the
+    column is already there."""
+    with app.app_context():
+        db.create_all()
+        with db.engine.connect() as conn:
+            obs_cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(observations)")]
+            if "manager" not in obs_cols:
+                conn.exec_driver_sql("ALTER TABLE observations ADD COLUMN manager VARCHAR(50)")
+            user_cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(users)")]
+            if "manager_name" not in user_cols:
+                conn.exec_driver_sql("ALTER TABLE users ADD COLUMN manager_name VARCHAR(50)")
+            conn.commit()
+
+        # Backfill manager for observations saved before this field existed.
+        stale = Observation.query.filter(Observation.manager.is_(None), Observation.location.isnot(None)).all()
+        for obs in stale:
+            info = departments.get_location_info(obs.location or "")
+            if info and info["manager"]:
+                obs.manager = info["manager"]
+                if not obs.department:
+                    obs.department = info["department"]
+        if stale:
+            db.session.commit()
+
+
+_run_light_migrations()
+
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
@@ -128,6 +160,8 @@ def dashboard_redirect():
         return redirect(url_for("admin_dashboard"))
     if current_user.role == "hse":
         return redirect(url_for("hse_dashboard"))
+    if current_user.role == "manager":
+        return redirect(url_for("manager_dashboard"))
     return redirect(url_for("user_dashboard"))
 
 
@@ -154,6 +188,9 @@ def _notify_department(obs):
 
         if dept:
             obs.department = dept
+        if mgr:
+            obs.manager = mgr
+        if dept or mgr:
             db.session.commit()
 
         if mgr_email:
@@ -274,11 +311,33 @@ def hse_update_observation(obs_id):
     return jsonify(obs.to_dict())
 
 
+@app.route("/manager")
+@roles_required("manager")
+def manager_dashboard():
+    return render_template("manager_dashboard.html", role="manager")
+
+
+@app.route("/manager/observations/<int:obs_id>", methods=["PUT"])
+@roles_required("manager")
+def manager_update_observation(obs_id):
+    obs = Observation.query.get_or_404(obs_id)
+    # A manager can only ever touch observations already routed to them.
+    if obs.manager != current_user.manager_name:
+        abort(403)
+    data = request.get_json(force=True)
+    for field in ("category", "severity", "status", "reporter_name"):
+        if field in data:
+            setattr(obs, field, data[field])
+    obs.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(obs.to_dict())
+
+
 @app.route("/admin")
 @roles_required("admin")
 def admin_dashboard():
     users = User.query.order_by(User.created_at.desc()).all()
-    return render_template("admin_dashboard.html", role="admin", users=users)
+    return render_template("admin_dashboard.html", role="admin", users=users, managers=departments.ALL_MANAGERS)
 
 
 @app.route("/admin/observations/<int:obs_id>", methods=["PUT"])
@@ -336,10 +395,15 @@ def admin_create_user():
     data = request.get_json(force=True)
     if User.query.filter_by(username=data.get("username")).first():
         return jsonify({"error": "Username already exists"}), 400
+    role = data.get("role", "user")
+    manager_name = data.get("manager_name") or None
+    if role == "manager" and manager_name not in departments.ALL_MANAGERS:
+        return jsonify({"error": "Select which manager this login represents"}), 400
     user = User(
         name=data.get("name", ""),
         username=data.get("username", ""),
-        role=data.get("role", "user"),
+        role=role,
+        manager_name=manager_name if role == "manager" else None,
     )
     user.set_password(data.get("password", "changeme123"))
     db.session.add(user)
@@ -359,21 +423,25 @@ def admin_delete_user(user_id):
 
 
 @app.route("/api/observations")
-@roles_required("hse", "admin")
+@roles_required("hse", "admin", "manager")
 def api_observations():
     q = Observation.query
     category = request.args.get("category")
     severity = request.args.get("severity")
     reporter = request.args.get("reporter")
     department = request.args.get("department")
+    if current_user.role == "manager":
+        # Managers only ever see their own scope — never take this from the
+        # query string, so a manager can't page through someone else's data.
+        q = q.filter(Observation.manager == current_user.manager_name)
+    elif department:
+        q = q.filter(Observation.department == department)
     if category:
         q = q.filter(Observation.category == category)
     if severity:
         q = q.filter(Observation.severity == severity)
     if reporter:
         q = q.filter(Observation.reporter_name == reporter)
-    if department:
-        q = q.filter(Observation.department == department)
     observations = q.order_by(Observation.created_at.desc()).all()
     return jsonify([o.to_dict() for o in observations])
 
@@ -384,6 +452,8 @@ def api_get_audio(obs_id):
     obs = Observation.query.get_or_404(obs_id)
     if current_user.role == "user" and obs.reporter_id != current_user.id:
         abort(403)
+    if current_user.role == "manager" and obs.manager != current_user.manager_name:
+        abort(403)
     if obs.drive_link:
         return redirect(obs.drive_link)
     if obs.audio_filename:
@@ -392,19 +462,22 @@ def api_get_audio(obs_id):
 
 
 @app.route("/api/observations/export.csv")
-@roles_required("hse", "admin")
+@roles_required("hse", "admin", "manager")
 def export_csv():
     import io
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 
-    observations = Observation.query.order_by(Observation.created_at.desc()).all()
+    q = Observation.query
+    if current_user.role == "manager":
+        q = q.filter(Observation.manager == current_user.manager_name)
+    observations = q.order_by(Observation.created_at.desc()).all()
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Observations"
 
-    headers = ["TIME", "REPORTER", "CATEGORY", "SEVERITY", "LOCATION", "DEPARTMENT",
+    headers = ["TIME", "REPORTER", "CATEGORY", "SEVERITY", "LOCATION", "DEPARTMENT", "MANAGER",
                "URDU SCRIPT", "ENGLISH TRANSLATION", "STATUS"]
     ws.append(headers)
     for cell in ws[1]:
@@ -420,6 +493,7 @@ def export_csv():
             o.severity or "",
             o.location or "",
             o.department or "",
+            o.manager or "",
             o.urdu_script or "",
             o.english_translation or "",
             o.status or "",
@@ -427,7 +501,7 @@ def export_csv():
 
     ws.auto_filter.ref = ws.dimensions
 
-    widths = [16, 18, 16, 12, 16, 14, 40, 45, 12]
+    widths = [16, 18, 16, 12, 16, 14, 12, 40, 45, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
