@@ -17,6 +17,7 @@
   <nav class="topnav">
     {% if current_user.role == 'user' %}<a href="{{ url_for('user_dashboard') }}" class="active">Report</a>{% endif %}
     {% if current_user.role in ('hse','admin') %}<a href="{{ url_for('hse_dashboard') }}" class="{{ 'active' if role=='hse' else '' }}">HSE Overview</a>{% endif %}
+    {% if current_user.role == 'manager' %}<a href="{{ url_for('manager_dashboard') }}" class="active">My Dashboard</a>{% endif %}
     {% if current_user.role == 'admin' %}<a href="{{ url_for('admin_dashboard') }}" class="{{ 'active' if role=='admin' else '' }}">Admin</a>{% endif %}
   </nav>
   <div class="userbox">
