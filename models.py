@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
-VALID_ROLES = ("admin", "hse", "user")
+VALID_ROLES = ("admin", "hse", "manager", "user")
 VALID_CATEGORIES = ("Unsafe Act", "Unsafe Condition", "Near Miss", "LTI")
 VALID_SEVERITIES = ("High", "Medium", "Low", "Not specified")
 
@@ -18,6 +18,9 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="user")
+    # Only set when role == "manager": which manager this login represents
+    # (must match a key in departments.MANAGER_EMAILS, e.g. "Kaleem").
+    manager_name = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     observations = db.relationship("Observation", backref="reporter", lazy=True)
@@ -33,7 +36,8 @@ class User(db.Model, UserMixin):
             "id": self.id,
             "name": self.name,
             "username": self.username,
-            "role": self.role
+            "role": self.role,
+            "manager_name": self.manager_name,
         }
 
 
@@ -49,6 +53,7 @@ class Observation(db.Model):
     severity = db.Column(db.String(20), nullable=False, default="Not specified")
     location = db.Column(db.String(120), nullable=True)
     department = db.Column(db.String(50), nullable=True)
+    manager = db.Column(db.String(50), nullable=True)
 
     urdu_script = db.Column(db.Text, nullable=True)
     english_translation = db.Column(db.Text, nullable=True)
@@ -77,6 +82,7 @@ class Observation(db.Model):
             "severity": self.severity,
             "location": self.location,
             "department": self.department,
+            "manager": self.manager,
             "urdu_script": self.urdu_script,
             "english_translation": self.english_translation,
             "audio_filename": self.audio_filename,
