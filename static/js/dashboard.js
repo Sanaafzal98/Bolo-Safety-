@@ -195,7 +195,8 @@ function openEdit(id) {
   document.getElementById('edit-reporter').value = o.reporter_name || '';
   document.getElementById('edit-category').value = o.category;
   document.getElementById('edit-severity').value = o.severity;
-  document.getElementById('edit-location').value = o.location || '';
+  const locationField = document.getElementById('edit-location');
+  if (locationField) locationField.value = o.location || '';
   document.getElementById('edit-status').value = o.status;
   document.getElementById('edit-modal').style.display = 'flex';
 }
@@ -203,17 +204,21 @@ document.getElementById('edit-cancel-btn').addEventListener('click', () => {
   document.getElementById('edit-modal').style.display = 'none';
 });
 document.getElementById('edit-save-btn').addEventListener('click', async () => {
-  const url = ROLE === 'admin' ? `/admin/observations/${editingId}` : `/hse/observations/${editingId}`;
+  const url = ROLE === 'admin' ? `/admin/observations/${editingId}`
+    : ROLE === 'manager' ? `/manager/observations/${editingId}`
+    : `/hse/observations/${editingId}`;
+  const locationField = document.getElementById('edit-location');
+  const body = {
+    reporter_name: document.getElementById('edit-reporter').value,
+    category: document.getElementById('edit-category').value,
+    severity: document.getElementById('edit-severity').value,
+    status: document.getElementById('edit-status').value,
+  };
+  if (locationField) body.location = locationField.value;
   await fetch(url, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      reporter_name: document.getElementById('edit-reporter').value,
-      category: document.getElementById('edit-category').value,
-      severity: document.getElementById('edit-severity').value,
-      location: document.getElementById('edit-location').value,
-      status: document.getElementById('edit-status').value,
-    })
+    body: JSON.stringify(body)
   });
   document.getElementById('edit-modal').style.display = 'none';
   loadObservations();
@@ -261,16 +266,26 @@ if (ROLE === 'admin') {
   document.getElementById('new-user-cancel-btn').addEventListener('click', () => {
     document.getElementById('add-user-modal').style.display = 'none';
   });
+  const roleSelect = document.getElementById('new-user-role');
+  const managerRow = document.getElementById('new-user-manager-row');
+  roleSelect.addEventListener('change', () => {
+    managerRow.style.display = roleSelect.value === 'manager' ? 'block' : 'none';
+  });
   document.getElementById('new-user-save-btn').addEventListener('click', async () => {
+    const role = roleSelect.value;
+    const payload = {
+      name: document.getElementById('new-user-name').value,
+      username: document.getElementById('new-user-username').value,
+      password: document.getElementById('new-user-password').value,
+      role: role,
+    };
+    if (role === 'manager') {
+      payload.manager_name = document.getElementById('new-user-manager-name').value;
+    }
     const res = await fetch('/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: document.getElementById('new-user-name').value,
-        username: document.getElementById('new-user-username').value,
-        password: document.getElementById('new-user-password').value,
-        role: document.getElementById('new-user-role').value,
-      })
+      body: JSON.stringify(payload)
     });
     if (res.ok) { window.location.reload(); }
     else { const err = await res.json(); alert(err.error || 'Failed to create user'); }
