@@ -42,7 +42,7 @@ LOCATION_INFO = {
     "Substation 5 Extension": {"department": "Electrical", "manager": "Faisal"},
     "Substation 6": {"department": "Electrical", "manager": "Faisal"},
 
-    # --- Ops / HSE (Kamran) ---
+    # --- HSE (Kamran) ---
     "Fire Pump House Room": {"department": "Ops", "manager": "Kamran"},
     "Fire Station": {"department": "HSE", "manager": "Kamran"},
     "First Aid Room": {"department": "HSE", "manager": "Kamran"},
@@ -171,7 +171,8 @@ MANAGER_EMAILS = {
     "Qasim": "bolosafety@gmail.com",
 }
 
-ALL_DEPARTMENTS = ["Admin", "Electrical", "HSE", "Mechanical", "Ops", "Operations", "Warehouse"]
+ALL_DEPARTMENTS = ["Admin", "Electrical", "HSE", "Mechanical", "Operations", "Warehouse"]
+ALL_MANAGERS = sorted(set(MANAGER_EMAILS.keys()))
 
 
 def get_location_info(location: str):
